@@ -1,0 +1,82 @@
+---
+- hosts: localhost
+  connection: local
+
+  vars:
+    servers:
+      localhost:
+        version: 9
+        release: 9.0
+        repos:
+          - rhel-9-for-x86_64-baseos-rpms
+          - rhel-9-for-x86_64-supplementary-rpms
+          - rhel-9-for-x86_64-appstream-rpms
+            #      uswa122.watts.com:
+            #        version: 8
+            #        release: 8.6
+            #        repos:
+            #          - rhel-8-for-x86_64-baseos-rpms
+            #          - rhel-8-for-x86_64-supplementary-rpms
+            #          - rhel-8-for-x86_64-appstream-rpms
+            #      uswa811.watts.com:
+            #        release: 7Server
+            #        repos:
+            #          - rhel-7-server-rpms
+            #          - rhel-7-server-optional-rpms
+            #          - rhel-7-server-extras-rpms
+            #          - rhel-7-server-supplementary-rpms
+            #          - rhel-server-rhscl-7-rpms
+            #      rhel6.internal.lan:
+            #        release: 6Server
+            #        repos:
+            #          - rhel-6-server-extras-rpms
+            #          - rhel-6-server-optional-rpms
+            #          - rhel-6-server-rpms
+            #          - rhel-6-server-supplementary-rpms
+            #          - rhel-server-rhscl-6-rpms
+
+    repo_base: /var/www/html/repos
+    config_path: /etc/reposync
+
+  gather_facts: false
+
+  tasks:
+
+    - name: Ensure required packages are installed
+      yum:
+        name: "{{ packages }}"
+      vars:
+        packages:
+        - yum-utils
+        - createrepo
+      become: yes
+
+    - name: Create the configuration path base directory
+      file:
+        path: '{{ config_path }}'
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      become: yes
+
+    - name: Create the directory to store the repo files on target
+      file:
+        path: '{{ config_path }}/repos.d'
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      become: yes
+
+    - name: Copy the yum.conf template to the target
+      template:
+        src: yum.conf.j2
+        dest: '{{ config_path }}/yum.conf'
+      become: yes
+
+    - name: Loop and process all Red Hat servers in the servers dict
+      include_tasks: process-server.yml
+      loop: "{{ q('dict', servers) }}"
+      loop_control:
+        loop_var: rhel_server
